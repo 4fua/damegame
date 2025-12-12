@@ -5,11 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chart Viewer</title>
     <style>
-        html, body { height: 100%; margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
-        
-        /* ヘッダー */
+        /* --- 基本設定 --- */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: sans-serif;
+            overflow: hidden; /* 全体のスクロールは内部で行う */
+        }
+
+        /* --- ヘッダー --- */
         header {
-            position: fixed; top: 0; left: 0; width: 100%; height: 50px;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 50px;
             background: #222; border-bottom: 2px solid #444;
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 20px; z-index: 9999; box-sizing: border-box;
@@ -20,43 +30,84 @@
         button:hover { background: #555; }
         a.back-link { color: #88f; text-decoration: none; font-size: 14px; margin-right: 15px;}
 
-        /* 横スクロールエリア */
+        /* --- 譜面スクロールエリア --- */
         #chart-scroll-area {
-            width: 100%; height: 100%; padding-top: 50px; box-sizing: border-box;
-            overflow-x: auto; overflow-y: hidden; white-space: nowrap;
+            width: 100%;
+            height: 100%;
+            padding-top: 50px; /* ヘッダー分 */
+            box-sizing: border-box;
+            
+            /* 横スクロール有効・縦スクロール無効（カラム内で行う） */
+            overflow-x: auto;
+            overflow-y: hidden; 
+            white-space: nowrap; /* カラムを横に並べる */
         }
+
         #chart-content {
-            height: 100%; padding: 20px; box-sizing: border-box;
-            display: inline-flex; align-items: flex-end;
+            height: 100%;
+            /* 上下左右の余白 */
+            padding: 40px 40px 60px 80px; 
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: flex-end; /* 下揃え */
         }
 
-        /* カラム */
+        /* 1列（カラム） */
         .column {
-            display: inline-block; vertical-align: bottom;
-            width: 130px; height: 100%; border-right: 2px dashed #333;
-            margin-right: 10px; padding-right: 10px; position: relative;
-        }
-        .column-inner {
-            position: absolute; bottom: 20px; left: 50px; width: 162px;
+            display: inline-flex;
+            flex-direction: column-reverse; /* 下から上へ */
+            vertical-align: bottom;
+            
+            border: 2px solid #555;
+            background: #000;
+            flex-shrink: 0;
+            position: relative;
+            margin-right: 100px; /* カラム間の間隔 */
         }
 
-        /* 譜面パーツ */
-        .measure-row { position: absolute; left: 0; width: 100%; box-sizing: border-box; border-top: 3px solid #fff; }
-        .grid-line { position: absolute; left: 0; width: 100%; height: 0px; z-index: 0; pointer-events: none; border-top-width: 1px; border-top-style: solid; }
+        /* 小節の行 */
+        .measure-row {
+            display: flex;
+            width: 100%;
+            position: relative;
+            box-sizing: border-box;
+            flex-shrink: 0; 
+            border-top: 3px solid #fff; 
+        }
+
+        /* グリッド線 */
+        .grid-line {
+            position: absolute; left: 0; width: 100%; height: 0px; z-index: 0; pointer-events: none;
+            border-top-width: 1px; border-top-style: solid;
+        }
         .grid-4 { border-top-color: #666; }
         .grid-16 { border-top-color: #333; }
-        .measure-number { position: absolute; left: -25px; bottom: 0; font-size: 12px; color: #aaa; text-align: right; width: 20px; font-weight: bold; }
-        .bpm-label { position: absolute; left: -90px; bottom: -5px; font-size: 11px; color: #0f0; background: rgba(0, 50, 0, 0.8); padding: 2px 4px; border-radius: 3px; font-weight: bold; z-index: 10; white-space: nowrap; text-align: right; width: 60px; }
-        
-        .lane-container { display: flex; height: 100%; width: 100%; border-left: 2px solid #555; border-right: 2px solid #555; }
-        .lane { flex: 1; border-right: 1px solid #333; position: relative; height: 100%; }
+
+        /* 左側のラベル */
+        .measure-number {
+            position: absolute; left: -25px; bottom: 0;
+            font-size: 12px; color: #aaa; text-align: right; width: 20px; font-weight: bold;
+        }
+        .bpm-label {
+            position: absolute; left: -85px; bottom: -5px;
+            font-size: 11px; color: #0f0; background: rgba(0, 50, 0, 0.8);
+            padding: 2px 4px; border-radius: 3px; font-weight: bold;
+            z-index: 10; white-space: nowrap; text-align: right; width: 50px;
+        }
+
+        /* レーン */
+        .lane {
+            width: 40px; border-right: 1px solid #333; position: relative; height: 100%;
+        }
         .lane:last-child { border-right: none; }
         
+        /* ノーツ */
         .note { position: absolute; left: 0; width: 100%; z-index: 2; }
         .note-1 { background-color: #0ff; box-shadow: 0 0 5px #0ff; }
         .note-2 { background-color: #00BFFF; box-shadow: 0 0 5px #00BFFF; width: 200%; left: 0; z-index: 3; }
         .note-3 { background-color: #00FF7F; box-shadow: 0 0 5px #00FF7F; opacity: 0.9; }
         .note-other { background-color: #aaa; }
+
     </style>
 </head>
 <body>
@@ -67,7 +118,7 @@
         <h1 id="chart-title">Loading...</h1>
     </div>
     <div class="controls">
-        <button id="btn-scale" onclick="changeScale()">速度調整 (PPS: 300)</button>
+        <button id="btn-scale" onclick="changeScale()">間隔調整 (現在: 310px)</button>
     </div>
 </header>
 
@@ -76,38 +127,36 @@
 </div>
 
 <script>
-    let PIXELS_PER_SECOND = 300; // 初期PPS
-    let loadedRawData = "";      // 再描画用にデータを保持
+    // --- 設定 ---
+    const MEASURES_PER_COLUMN = 4; // 4小節ごとに右へ折り返し
+    let currentPixelPerMeasure = 310; // デフォルト高さ
+    let loadedRawData = "";
 
     window.onload = async function() {
-        // URLパラメータから ?file=xxx を取得
         const params = new URLSearchParams(window.location.search);
         const fileName = params.get('file');
 
         if (!fileName) {
-            alert("譜面ファイルが指定されていません。");
+            alert("ファイルが指定されていません");
             return;
         }
-
         document.getElementById('chart-title').innerText = fileName;
 
         try {
-            // ファイルをFetchする
-            const response = await fetch(fileName);
-            if (!response.ok) throw new Error("File not found");
-            loadedRawData = await response.text();
-            
+            const res = await fetch(fileName);
+            if (!res.ok) throw new Error("File load error");
+            loadedRawData = await res.text();
             renderChart(loadedRawData);
         } catch (e) {
-            alert("譜面データの読み込みに失敗しました: " + e.message);
+            alert("読み込みエラー: " + e.message);
         }
     };
 
     function changeScale() {
-        const input = prompt("スクロール速度 (ピクセル/秒)\nデフォルト: 300", PIXELS_PER_SECOND);
+        const input = prompt("間隔（高さ）調整 (px)\nデフォルト: 310", currentPixelPerMeasure);
         if (input !== null && !isNaN(input) && input > 50) {
-            PIXELS_PER_SECOND = parseInt(input);
-            document.getElementById('btn-scale').innerText = `速度調整 (PPS: ${PIXELS_PER_SECOND})`;
+            currentPixelPerMeasure = parseInt(input);
+            document.getElementById('btn-scale').innerText = `間隔調整 (現在: ${currentPixelPerMeasure}px)`;
             renderChart(loadedRawData);
         }
     }
@@ -118,6 +167,7 @@
 
         const lines = rawString.replace(/\r\n/g, '\n').split('\n');
 
+        // ノーツパース (空白小節を維持)
         const parseLine = (lineStr) => {
             if (!lineStr) return [];
             let clean = lineStr.replace(/,end,".*/, '');
@@ -125,17 +175,12 @@
             return clean.split(',');
         };
 
-        // レーンデータの結合
         const fullLanes = [];
         if(lines.length > 10) {
             fullLanes.push(parseLine(lines[3]).concat(parseLine(lines[7])));
             fullLanes.push(parseLine(lines[4]).concat(parseLine(lines[8])));
             fullLanes.push(parseLine(lines[5]).concat(parseLine(lines[9])));
             fullLanes.push(parseLine(lines[6]).concat(parseLine(lines[10])));
-        } else {
-            // データ不足時のガード
-            console.error("Data too short");
-            return;
         }
 
         let totalMeasures = 0;
@@ -192,63 +237,46 @@
             }
         }
 
-        // 全小節プロパティの確定
-        const MEASURE_PROPS = [];
-        let curBpm = bpmMap[0] || 120;
-        let curDiv = defaultDivideLength;
-        if(divideMap[0] !== undefined) curDiv = divideMap[0];
-
-        for(let m=0; m<totalMeasures; m++){
-            if(bpmMap[m] !== undefined) curBpm = bpmMap[m];
-            if(divideMap[m] !== undefined) curDiv = divideMap[m];
-            
-            MEASURE_PROPS[m] = {
-                bpm: curBpm,
-                divide: curDiv,
-                bpmChanged: (bpmMap[m] !== undefined || m===0)
-            };
-        }
-
-        // --- Phase 2: 描画 (時間軸 & カラム) ---
-        const VIEWPORT_HEIGHT = window.innerHeight - 80; 
-        
-        let currentColDiv = document.createElement('div');
-        currentColDiv.className = 'column';
-        let innerContainer = document.createElement('div');
-        innerContainer.className = 'column-inner';
-        currentColDiv.appendChild(innerContainer);
-        container.appendChild(currentColDiv);
-
-        let currentBottomY = 0; 
+        // --- Phase 2: 小節長(Divide)の確定 ---
+        const MEASURE_LENGTHS = [];
+        let currentLen = defaultDivideLength;
+        if (divideMap[0] !== undefined) currentLen = divideMap[0];
 
         for (let m = 0; m < totalMeasures; m++) {
-            const props = MEASURE_PROPS[m];
-            
-            // 時間(秒) = (60 / BPM) * 4 * (Divide / 8.0)
-            const durationSec = (60 / props.bpm) * 4 * (props.divide / 8.0);
-            const heightPx = durationSec * PIXELS_PER_SECOND;
+            if (divideMap[m] !== undefined) {
+                currentLen = divideMap[m];
+            }
+            MEASURE_LENGTHS[m] = currentLen;
+        }
 
-            // 折り返し判定
-            if (currentBottomY > 0 && (currentBottomY + heightPx > VIEWPORT_HEIGHT)) {
-                currentColDiv = document.createElement('div');
-                currentColDiv.className = 'column';
-                innerContainer = document.createElement('div');
-                innerContainer.className = 'column-inner';
-                currentColDiv.appendChild(innerContainer);
-                container.appendChild(currentColDiv);
-                currentBottomY = 0;
+        // --- Phase 3: 描画 ---
+        let currentBpmVal = bpmMap[0] || 120;
+        let currentColumnDiv = null;
+
+        for (let m = 0; m < totalMeasures; m++) {
+            if (m % MEASURES_PER_COLUMN === 0) {
+                currentColumnDiv = document.createElement('div');
+                currentColumnDiv.className = 'column';
+                container.appendChild(currentColumnDiv);
             }
 
-            // 小節コンテナ
+            // BPM更新
+            let bpmChanged = false;
+            if (bpmMap[m] !== undefined) {
+                currentBpmVal = bpmMap[m];
+                bpmChanged = true;
+            }
+
+            // 高さ計算: (Divide / 8.0) * Scale
+            const length = MEASURE_LENGTHS[m];
+            const measureHeight = (length / 8.0) * currentPixelPerMeasure;
+            
             const rowDiv = document.createElement('div');
             rowDiv.className = 'measure-row';
-            rowDiv.style.height = `${heightPx}px`;
-            rowDiv.style.bottom = `${currentBottomY}px`; 
-            
-            currentBottomY += heightPx;
+            rowDiv.style.height = `${measureHeight}px`;
 
-            // グリッド
-            const gridCount = (props.divide / 8.0) * 16;
+            // グリッド (16分音符)
+            const gridCount = (length / 8.0) * 16; 
             for (let g = 1; g < gridCount; g++) {
                 const gridLine = document.createElement('div');
                 gridLine.className = 'grid-line';
@@ -258,23 +286,21 @@
                 rowDiv.appendChild(gridLine);
             }
 
-            // ラベル
+            // 小節番号
             const numSpan = document.createElement('span');
             numSpan.className = 'measure-number';
             numSpan.innerText = m;
             rowDiv.appendChild(numSpan);
             
-            if (props.bpmChanged) {
+            // BPMラベル
+            if (bpmChanged || m === 0) {
                 const bpmSpan = document.createElement('span');
                 bpmSpan.className = 'bpm-label';
-                bpmSpan.innerText = `BPM ${props.bpm}`;
+                bpmSpan.innerText = `BPM ${currentBpmVal}`;
                 rowDiv.appendChild(bpmSpan);
             }
 
             // ノーツ
-            const laneContainer = document.createElement('div');
-            laneContainer.className = 'lane-container';
-            
             fullLanes.forEach(laneData => {
                 const laneDiv = document.createElement('div');
                 laneDiv.className = 'lane';
@@ -305,10 +331,10 @@
                         }
                     }
                 }
-                laneContainer.appendChild(laneDiv);
+                rowDiv.appendChild(laneDiv);
             });
-            rowDiv.appendChild(laneContainer);
-            innerContainer.appendChild(rowDiv);
+
+            currentColumnDiv.appendChild(rowDiv);
         }
     }
 </script>
