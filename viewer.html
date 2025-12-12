@@ -6,23 +6,37 @@
     <title>Chart Viewer</title>
     <style>
         /* --- 基本設定 --- */
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
+        html {
+            /* 高さ制限を撤廃 */
+            height: auto;
+            min-height: 100%;
+        }
+
+        body {
             background-color: #000;
             color: #fff;
+            margin: 0;
+            padding: 0;
             font-family: sans-serif;
-            overflow: hidden; /* 全体のスクロールは内部で行う */
+            /* ★重要: ブラウザ標準のスクロールバーを常に許可 */
+            overflow: visible; 
         }
 
         /* --- ヘッダー --- */
         header {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 50px;
-            background: #222; border-bottom: 2px solid #444;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; z-index: 9999; box-sizing: border-box;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background: #222;
+            border-bottom: 2px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 9999;
+            box-sizing: border-box;
         }
         h1 { font-size: 16px; margin: 0; color: #ddd; }
         .controls { display: flex; gap: 10px; }
@@ -30,39 +44,40 @@
         button:hover { background: #555; }
         a.back-link { color: #88f; text-decoration: none; font-size: 14px; margin-right: 15px;}
 
-        /* --- 譜面スクロールエリア --- */
-        #chart-scroll-area {
-            width: 100%;
-            height: 100%;
-            padding-top: 50px; /* ヘッダー分 */
-            box-sizing: border-box;
-            
-            /* 横スクロール有効・縦スクロール無効（カラム内で行う） */
-            overflow-x: auto;
-            overflow-y: hidden; 
-            white-space: nowrap; /* カラムを横に並べる */
-        }
-
+        /* --- 譜面コンテナ --- */
         #chart-content {
-            height: 100%;
-            /* 上下左右の余白 */
-            padding: 40px 40px 60px 80px; 
+            /* ヘッダーの高さ(50px) + 少しの余白 */
+            padding-top: 80px; 
+            /* 左側のBPM表示用余白 */
+            padding-left: 80px;
+            /* 右側の余白 */
+            padding-right: 40px;
+            /* ★修正点: 下の余白を極小に (10px) */
+            padding-bottom: 10px;
+            
+            /* 中身のサイズに合わせて広がる */
+            width: fit-content;
+            min-height: 100vh;
+            
+            /* カラムを横に並べ、下端を揃える */
+            display: flex;
+            align-items: flex-end; 
             box-sizing: border-box;
-            display: inline-flex;
-            align-items: flex-end; /* 下揃え */
         }
 
         /* 1列（カラム） */
         .column {
-            display: inline-flex;
-            flex-direction: column-reverse; /* 下から上へ */
-            vertical-align: bottom;
+            display: flex;
+            flex-direction: column-reverse; /* 小節を下から上へ積む */
             
+            /* カラム自体のスタイル */
             border: 2px solid #555;
             background: #000;
-            flex-shrink: 0;
+            flex-shrink: 0; /* 縮小禁止 */
             position: relative;
-            margin-right: 100px; /* カラム間の間隔 */
+            
+            /* カラム間の間隔 */
+            margin-right: 100px;
         }
 
         /* 小節の行 */
@@ -71,33 +86,57 @@
             width: 100%;
             position: relative;
             box-sizing: border-box;
-            flex-shrink: 0; 
-            border-top: 3px solid #fff; 
+            flex-shrink: 0; /* 高さ維持 */
+            border-top: 3px solid #fff; /* 小節線 */
         }
 
         /* グリッド線 */
         .grid-line {
-            position: absolute; left: 0; width: 100%; height: 0px; z-index: 0; pointer-events: none;
-            border-top-width: 1px; border-top-style: solid;
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 0px;
+            z-index: 0;
+            pointer-events: none;
+            border-top-width: 1px;
+            border-top-style: solid;
         }
         .grid-4 { border-top-color: #666; }
         .grid-16 { border-top-color: #333; }
 
         /* 左側のラベル */
         .measure-number {
-            position: absolute; left: -25px; bottom: 0;
-            font-size: 12px; color: #aaa; text-align: right; width: 20px; font-weight: bold;
+            position: absolute;
+            left: -25px; 
+            bottom: 0;
+            font-size: 12px;
+            color: #aaa;
+            text-align: right;
+            width: 20px;
+            font-weight: bold;
         }
         .bpm-label {
-            position: absolute; left: -85px; bottom: -5px;
-            font-size: 11px; color: #0f0; background: rgba(0, 50, 0, 0.8);
-            padding: 2px 4px; border-radius: 3px; font-weight: bold;
-            z-index: 10; white-space: nowrap; text-align: right; width: 50px;
+            position: absolute;
+            left: -85px; 
+            bottom: -5px;
+            font-size: 11px;
+            color: #0f0; 
+            background: rgba(0, 50, 0, 0.8);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+            z-index: 10;
+            white-space: nowrap;
+            text-align: right;
+            width: 50px;
         }
 
         /* レーン */
         .lane {
-            width: 40px; border-right: 1px solid #333; position: relative; height: 100%;
+            width: 40px;
+            border-right: 1px solid #333;
+            position: relative;
+            height: 100%;
         }
         .lane:last-child { border-right: none; }
         
@@ -122,14 +161,12 @@
     </div>
 </header>
 
-<div id="chart-scroll-area">
-    <div id="chart-content"></div>
-</div>
+<div id="chart-content"></div>
 
 <script>
     // --- 設定 ---
-    const MEASURES_PER_COLUMN = 4; // 4小節ごとに右へ折り返し
-    let currentPixelPerMeasure = 310; // デフォルト高さ
+    const MEASURES_PER_COLUMN = 4; // 4小節で折り返し
+    let currentPixelPerMeasure = 310; 
     let loadedRawData = "";
 
     window.onload = async function() {
@@ -167,7 +204,7 @@
 
         const lines = rawString.replace(/\r\n/g, '\n').split('\n');
 
-        // ノーツパース (空白小節を維持)
+        // ノーツパース: 空白小節を維持する（行末のカンマのみ削除）
         const parseLine = (lineStr) => {
             if (!lineStr) return [];
             let clean = lineStr.replace(/,end,".*/, '');
@@ -181,6 +218,9 @@
             fullLanes.push(parseLine(lines[4]).concat(parseLine(lines[8])));
             fullLanes.push(parseLine(lines[5]).concat(parseLine(lines[9])));
             fullLanes.push(parseLine(lines[6]).concat(parseLine(lines[10])));
+        } else {
+            console.error("Data too short");
+            return;
         }
 
         let totalMeasures = 0;
@@ -237,7 +277,7 @@
             }
         }
 
-        // --- Phase 2: 小節長(Divide)の確定 ---
+        // --- Phase 2: 全小節の長さを確定 ---
         const MEASURE_LENGTHS = [];
         let currentLen = defaultDivideLength;
         if (divideMap[0] !== undefined) currentLen = divideMap[0];
@@ -267,7 +307,7 @@
                 bpmChanged = true;
             }
 
-            // 高さ計算: (Divide / 8.0) * Scale
+            // 高さ計算
             const length = MEASURE_LENGTHS[m];
             const measureHeight = (length / 8.0) * currentPixelPerMeasure;
             
@@ -275,7 +315,7 @@
             rowDiv.className = 'measure-row';
             rowDiv.style.height = `${measureHeight}px`;
 
-            // グリッド (16分音符)
+            // グリッド
             const gridCount = (length / 8.0) * 16; 
             for (let g = 1; g < gridCount; g++) {
                 const gridLine = document.createElement('div');
@@ -300,7 +340,7 @@
                 rowDiv.appendChild(bpmSpan);
             }
 
-            // ノーツ
+            // ノーツ描画
             fullLanes.forEach(laneData => {
                 const laneDiv = document.createElement('div');
                 laneDiv.className = 'lane';
