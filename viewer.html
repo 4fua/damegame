@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chart Viewer</title>
+    <title>Chart Viewer (Fixed 4-Measure Wrap)</title>
     <style>
         /* --- 基本設定 --- */
-        html {
-            /* 高さ制限を撤廃 */
-            height: auto;
-            min-height: 100%;
-        }
-
+        html { height: 100%; }
         body {
             background-color: #000;
             color: #fff;
             margin: 0;
             padding: 0;
             font-family: sans-serif;
-            /* ★重要: ブラウザ標準のスクロールバーを常に許可 */
-            overflow: visible; 
+            /* 横スクロールのみ有効にする */
+            overflow-y: hidden; 
+            overflow-x: auto;
+            height: 100%;
         }
 
         /* --- ヘッダー --- */
@@ -46,47 +43,53 @@
 
         /* --- 譜面コンテナ --- */
         #chart-content {
-            /* ヘッダーの高さ(50px) + 少しの余白 */
-            padding-top: 80px; 
+            /* ヘッダー分空ける */
+            padding-top: 60px; 
             /* 左側のBPM表示用余白 */
             padding-left: 80px;
             /* 右側の余白 */
             padding-right: 40px;
-            /* ★修正点: 下の余白を極小に (10px) */
-            padding-bottom: 10px;
+            /* 下の余白 */
+            padding-bottom: 20px;
             
-            /* 中身のサイズに合わせて広がる */
-            width: fit-content;
-            min-height: 100vh;
+            height: 100%;
+            box-sizing: border-box;
             
             /* カラムを横に並べ、下端を揃える */
-            display: flex;
+            display: inline-flex;
             align-items: flex-end; 
-            box-sizing: border-box;
+            white-space: nowrap;
         }
 
         /* 1列（カラム） */
         .column {
-            display: flex;
-            flex-direction: column-reverse; /* 小節を下から上へ積む */
+            display: inline-block;
+            vertical-align: bottom;
             
             /* カラム自体のスタイル */
             border: 2px solid #555;
             background: #000;
-            flex-shrink: 0; /* 縮小禁止 */
             position: relative;
             
+            /* 幅固定 (レーン40px*4 + 枠線等) */
+            width: 164px; 
+            
             /* カラム間の間隔 */
-            margin-right: 100px;
+            margin-right: 80px;
+            
+            /* 高さ: 中身（measure-row）の積み上げに依存するが、
+               relative内のabsolute配置のために最低限の高さを確保するか、
+               JSで高さを指定する。
+               今回は「下から積み上げ」なので、見た目上の高さは中身で決まる。
+            */
         }
 
         /* 小節の行 */
         .measure-row {
-            display: flex;
+            position: absolute;
+            left: 0;
             width: 100%;
-            position: relative;
             box-sizing: border-box;
-            flex-shrink: 0; /* 高さ維持 */
             border-top: 3px solid #fff; /* 小節線 */
         }
 
@@ -132,8 +135,13 @@
         }
 
         /* レーン */
+        .lane-container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
         .lane {
-            width: 40px;
+            flex: 1; /* 均等割り */
             border-right: 1px solid #333;
             position: relative;
             height: 100%;
@@ -165,7 +173,7 @@
 
 <script>
     // --- 設定 ---
-    const MEASURES_PER_COLUMN = 4; // 4小節で折り返し
+    const MEASURES_PER_COLUMN = 4; // ★ここを4で固定
     let currentPixelPerMeasure = 310; 
     let loadedRawData = "";
 
@@ -204,7 +212,7 @@
 
         const lines = rawString.replace(/\r\n/g, '\n').split('\n');
 
-        // ノーツパース: 空白小節を維持する（行末のカンマのみ削除）
+        // ノーツパース
         const parseLine = (lineStr) => {
             if (!lineStr) return [];
             let clean = lineStr.replace(/,end,".*/, '');
@@ -277,7 +285,7 @@
             }
         }
 
-        // --- Phase 2: 全小節の長さを確定 ---
+        // --- Phase 2: 小節長(Divide)の確定 ---
         const MEASURE_LENGTHS = [];
         let currentLen = defaultDivideLength;
         if (divideMap[0] !== undefined) currentLen = divideMap[0];
@@ -291,13 +299,29 @@
 
         // --- Phase 3: 描画 ---
         let currentBpmVal = bpmMap[0] || 120;
+        
         let currentColumnDiv = null;
+        let currentBottomY = 0; // カラム内での積み上げY座標
 
         for (let m = 0; m < totalMeasures; m++) {
+            // ★ 4小節ごとに新しいカラムを作る
             if (m % MEASURES_PER_COLUMN === 0) {
                 currentColumnDiv = document.createElement('div');
                 currentColumnDiv.className = 'column';
+                
+                // カラムの高さを明示的に計算（これがないとabsolute配置の親として高さが0になる場合がある）
+                // 4小節分の高さを合算して style.height に設定する
+                let colHeight = 0;
+                for(let k=0; k<MEASURES_PER_COLUMN; k++) {
+                    let targetM = m + k;
+                    if(targetM < totalMeasures) {
+                        colHeight += (MEASURE_LENGTHS[targetM] / 8.0) * currentPixelPerMeasure;
+                    }
+                }
+                currentColumnDiv.style.height = `${colHeight}px`;
+
                 container.appendChild(currentColumnDiv);
+                currentBottomY = 0; // リセット
             }
 
             // BPM更新
@@ -311,9 +335,13 @@
             const length = MEASURE_LENGTHS[m];
             const measureHeight = (length / 8.0) * currentPixelPerMeasure;
             
+            // 行の作成
             const rowDiv = document.createElement('div');
             rowDiv.className = 'measure-row';
             rowDiv.style.height = `${measureHeight}px`;
+            rowDiv.style.bottom = `${currentBottomY}px`; // 下から積み上げる
+            
+            currentBottomY += measureHeight; // 次の小節のために高さを足す
 
             // グリッド
             const gridCount = (length / 8.0) * 16; 
@@ -340,7 +368,10 @@
                 rowDiv.appendChild(bpmSpan);
             }
 
-            // ノーツ描画
+            // ノーツ描画 (レーンコンテナを作る)
+            const laneContainer = document.createElement('div');
+            laneContainer.className = 'lane-container';
+
             fullLanes.forEach(laneData => {
                 const laneDiv = document.createElement('div');
                 laneDiv.className = 'lane';
@@ -371,9 +402,11 @@
                         }
                     }
                 }
-                rowDiv.appendChild(laneDiv);
+                laneContainer.appendChild(laneDiv);
             });
-
+            rowDiv.appendChild(laneContainer);
+            
+            // カラムに追加
             currentColumnDiv.appendChild(rowDiv);
         }
     }
