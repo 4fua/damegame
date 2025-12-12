@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chart Viewer (Fixed Scroll & Divide)</title>
+    <title>Chart Viewer (Mobile Fixed)</title>
     <style>
         /* --- 基本設定 --- */
         html {
+            /* 高さを固定しない */
             height: auto;
             min-height: 100%;
         }
@@ -18,11 +19,12 @@
             padding: 0;
             font-family: sans-serif;
             
-            /* ★修正: 縦横どちらのスクロールも制限しない */
+            /* ★重要: 縦横どちらもスクロールを許可する */
             overflow: auto; 
             
+            /* 中身が少なくても画面いっぱいまで黒くする */
+            min-height: 100vh;
             width: 100%;
-            height: 100%;
         }
 
         /* --- ヘッダー --- */
@@ -48,22 +50,26 @@
         a.back-link { color: #88f; text-decoration: none; font-size: 14px; margin-right: 15px;}
 
         /* --- 譜面コンテナ --- */
-        #chart-content {
-            /* ヘッダーの高さ + 余白 */
-            padding-top: 80px; 
-            padding-left: 80px;
-            padding-right: 40px;
-            /* 下の余白（最小限） */
-            padding-bottom: 10px;
+        #chart-scroll-area {
+            /* 画面固定(height:100%)をやめ、中身なりに伸ばす */
+            width: 100%;
+            height: auto; 
             
-            /* 中身に合わせてサイズ可変 */
-            width: fit-content;
-            min-height: 100vh;
-            
-            /* 横並び・下揃え */
-            display: inline-flex;
-            align-items: flex-end; 
+            padding-top: 50px; /* ヘッダー分 */
             box-sizing: border-box;
+        }
+
+        #chart-content {
+            /* コンテンツ自体も高さを固定しない */
+            height: auto;
+            min-height: calc(100vh - 50px); /* 最低でも画面の高さは確保 */
+            
+            /* 余白調整 */
+            padding: 40px 40px 20px 80px; 
+            box-sizing: border-box;
+            
+            display: inline-flex;
+            align-items: flex-end; /* 下揃え */
         }
 
         /* 1列（カラム） */
@@ -76,9 +82,7 @@
             background: #000;
             flex-shrink: 0;
             position: relative;
-            
-            /* カラム間の間隔 */
-            margin-right: 100px;
+            margin-right: 100px; /* カラム間の間隔 */
         }
 
         /* 小節の行 */
@@ -93,51 +97,27 @@
 
         /* グリッド線 */
         .grid-line {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 0px;
-            z-index: 0;
-            pointer-events: none;
-            border-top-width: 1px;
-            border-top-style: solid;
+            position: absolute; left: 0; width: 100%; height: 0px; z-index: 0; pointer-events: none;
+            border-top-width: 1px; border-top-style: solid;
         }
         .grid-4 { border-top-color: #666; }
         .grid-16 { border-top-color: #333; }
 
         /* 左側のラベル */
         .measure-number {
-            position: absolute;
-            left: -25px; 
-            bottom: 0;
-            font-size: 12px;
-            color: #aaa;
-            text-align: right;
-            width: 20px;
-            font-weight: bold;
+            position: absolute; left: -25px; bottom: 0;
+            font-size: 12px; color: #aaa; text-align: right; width: 20px; font-weight: bold;
         }
         .bpm-label {
-            position: absolute;
-            left: -85px; 
-            bottom: -5px;
-            font-size: 11px;
-            color: #0f0; 
-            background: rgba(0, 50, 0, 0.8);
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-weight: bold;
-            z-index: 10;
-            white-space: nowrap;
-            text-align: right;
-            width: 50px;
+            position: absolute; left: -85px; bottom: -5px;
+            font-size: 11px; color: #0f0; background: rgba(0, 50, 0, 0.8);
+            padding: 2px 4px; border-radius: 3px; font-weight: bold;
+            z-index: 10; white-space: nowrap; text-align: right; width: 50px;
         }
 
         /* レーン */
         .lane {
-            width: 40px;
-            border-right: 1px solid #333;
-            position: relative;
-            height: 100%;
+            width: 40px; border-right: 1px solid #333; position: relative; height: 100%;
         }
         .lane:last-child { border-right: none; }
         
@@ -162,12 +142,14 @@
     </div>
 </header>
 
-<div id="chart-content"></div>
+<div id="chart-scroll-area">
+    <div id="chart-content"></div>
+</div>
 
 <script>
     // --- 設定 ---
-    const MEASURES_PER_COLUMN = 4; // 4小節ごとに固定で折り返し
-    let currentPixelPerMeasure = 310; 
+    const MEASURES_PER_COLUMN = 4; // 4小節ごとに右へ折り返し
+    let currentPixelPerMeasure = 310; // デフォルト高さ
     let loadedRawData = "";
 
     window.onload = async function() {
@@ -205,7 +187,7 @@
 
         const lines = rawString.replace(/\r\n/g, '\n').split('\n');
 
-        // ノーツパース: 行末のカンマのみ削除（空白小節維持）
+        // ノーツパース (空白小節を維持)
         const parseLine = (lineStr) => {
             if (!lineStr) return [];
             let clean = lineStr.replace(/,end,".*/, '');
@@ -219,9 +201,6 @@
             fullLanes.push(parseLine(lines[4]).concat(parseLine(lines[8])));
             fullLanes.push(parseLine(lines[5]).concat(parseLine(lines[9])));
             fullLanes.push(parseLine(lines[6]).concat(parseLine(lines[10])));
-        } else {
-            console.error("Data too short");
-            return;
         }
 
         let totalMeasures = 0;
@@ -278,7 +257,7 @@
             }
         }
 
-        // --- Phase 2: 小節長の確定（事前計算） ---
+        // --- Phase 2: 小節長(Divide)の確定 ---
         const MEASURE_LENGTHS = [];
         let currentLen = defaultDivideLength;
         if (divideMap[0] !== undefined) currentLen = divideMap[0];
@@ -295,7 +274,6 @@
         let currentColumnDiv = null;
 
         for (let m = 0; m < totalMeasures; m++) {
-            // 4小節ごとにカラム作成
             if (m % MEASURES_PER_COLUMN === 0) {
                 currentColumnDiv = document.createElement('div');
                 currentColumnDiv.className = 'column';
@@ -317,7 +295,7 @@
             rowDiv.className = 'measure-row';
             rowDiv.style.height = `${measureHeight}px`;
 
-            // グリッド
+            // グリッド (16分音符)
             const gridCount = (length / 8.0) * 16; 
             for (let g = 1; g < gridCount; g++) {
                 const gridLine = document.createElement('div');
