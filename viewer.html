@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart Viewer</title>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; overflow: hidden; }
+        
+        /* ヘッダー */
+        header {
+            position: fixed; top: 0; left: 0; width: 100%; height: 50px;
+            background: #222; border-bottom: 2px solid #444;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; z-index: 9999; box-sizing: border-box;
+        }
+        h1 { font-size: 16px; margin: 0; color: #ddd; }
+        .controls { display: flex; gap: 10px; }
+        button { background: #444; color: #fff; border: 1px solid #666; padding: 5px 12px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        button:hover { background: #555; }
+        a.back-link { color: #88f; text-decoration: none; font-size: 14px; margin-right: 15px;}
+
+        /* 横スクロールエリア */
+        #chart-scroll-area {
+            width: 100%; height: 100%; padding-top: 50px; box-sizing: border-box;
+            overflow-x: auto; overflow-y: hidden; white-space: nowrap;
+        }
+        #chart-content {
+            height: 100%; padding: 20px; box-sizing: border-box;
+            display: inline-flex; align-items: flex-end;
+        }
+
+        /* カラム */
+        .column {
+            display: inline-block; vertical-align: bottom;
+            width: 130px; height: 100%; border-right: 2px dashed #333;
+            margin-right: 10px; padding-right: 10px; position: relative;
+        }
+        .column-inner {
+            position: absolute; bottom: 20px; left: 50px; width: 162px;
+        }
+
+        /* 譜面パーツ */
+        .measure-row { position: absolute; left: 0; width: 100%; box-sizing: border-box; border-top: 3px solid #fff; }
+        .grid-line { position: absolute; left: 0; width: 100%; height: 0px; z-index: 0; pointer-events: none; border-top-width: 1px; border-top-style: solid; }
+        .grid-4 { border-top-color: #666; }
+        .grid-16 { border-top-color: #333; }
+        .measure-number { position: absolute; left: -25px; bottom: 0; font-size: 12px; color: #aaa; text-align: right; width: 20px; font-weight: bold; }
+        .bpm-label { position: absolute; left: -90px; bottom: -5px; font-size: 11px; color: #0f0; background: rgba(0, 50, 0, 0.8); padding: 2px 4px; border-radius: 3px; font-weight: bold; z-index: 10; white-space: nowrap; text-align: right; width: 60px; }
+        
+        .lane-container { display: flex; height: 100%; width: 100%; border-left: 2px solid #555; border-right: 2px solid #555; }
+        .lane { flex: 1; border-right: 1px solid #333; position: relative; height: 100%; }
+        .lane:last-child { border-right: none; }
+        
+        .note { position: absolute; left: 0; width: 100%; z-index: 2; }
+        .note-1 { background-color: #0ff; box-shadow: 0 0 5px #0ff; }
+        .note-2 { background-color: #00BFFF; box-shadow: 0 0 5px #00BFFF; width: 200%; left: 0; z-index: 3; }
+        .note-3 { background-color: #00FF7F; box-shadow: 0 0 5px #00FF7F; opacity: 0.9; }
+        .note-other { background-color: #aaa; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="display:flex; align-items:center;">
+        <a href="index.html" class="back-link">← 戻る</a>
+        <h1 id="chart-title">Loading...</h1>
+    </div>
+    <div class="controls">
+        <button id="btn-scale" onclick="changeScale()">速度調整 (PPS: 300)</button>
+    </div>
+</header>
+
+<div id="chart-scroll-area">
+    <div id="chart-content"></div>
+</div>
+
+<script>
+    let PIXELS_PER_SECOND = 300; // 初期PPS
+    let loadedRawData = "";      // 再描画用にデータを保持
+
+    window.onload = async function() {
+        // URLパラメータから ?file=xxx を取得
+        const params = new URLSearchParams(window.location.search);
+        const fileName = params.get('file');
+
+        if (!fileName) {
+            alert("譜面ファイルが指定されていません。");
+            return;
+        }
+
+        document.getElementById('chart-title').innerText = fileName;
+
+        try {
+            // ファイルをFetchする
+            const response = await fetch(fileName);
+            if (!response.ok) throw new Error("File not found");
+            loadedRawData = await response.text();
+            
+            renderChart(loadedRawData);
+        } catch (e) {
+            alert("譜面データの読み込みに失敗しました: " + e.message);
+        }
+    };
+
+    function changeScale() {
+        const input = prompt("スクロール速度 (ピクセル/秒)\nデフォルト: 300", PIXELS_PER_SECOND);
+        if (input !== null && !isNaN(input) && input > 50) {
+            PIXELS_PER_SECOND = parseInt(input);
+            document.getElementById('btn-scale').innerText = `速度調整 (PPS: ${PIXELS_PER_SECOND})`;
+            renderChart(loadedRawData);
+        }
+    }
+
+    function renderChart(rawString) {
+        const container = document.getElementById('chart-content');
+        container.innerHTML = '';
+
+        const lines = rawString.replace(/\r\n/g, '\n').split('\n');
+
+        const parseLine = (lineStr) => {
+            if (!lineStr) return [];
+            let clean = lineStr.replace(/,end,".*/, '');
+            if(clean.endsWith(',')) clean = clean.slice(0, -1);
+            return clean.split(',');
+        };
+
+        // レーンデータの結合
+        const fullLanes = [];
+        if(lines.length > 10) {
+            fullLanes.push(parseLine(lines[3]).concat(parseLine(lines[7])));
+            fullLanes.push(parseLine(lines[4]).concat(parseLine(lines[8])));
+            fullLanes.push(parseLine(lines[5]).concat(parseLine(lines[9])));
+            fullLanes.push(parseLine(lines[6]).concat(parseLine(lines[10])));
+        } else {
+            // データ不足時のガード
+            console.error("Data too short");
+            return;
+        }
+
+        let totalMeasures = 0;
+        fullLanes.forEach(l => { if(l.length > totalMeasures) totalMeasures = l.length; });
+
+        // --- Phase 1: メタデータ解析 ---
+        const metaLines = lines.slice(11);
+        const bpmMap = {};
+        const divideMap = {};
+        
+        let defaultDivideLength = 8.0; 
+        let state = "BPM"; 
+
+        for (let i = 0; i < metaLines.length; i++) {
+            let line = metaLines[i].trim();
+            if (line === "") continue;
+            if (line === "hideBarLine") break;
+
+            if (state === "BPM") {
+                if (line === "divide") {
+                    state = "DIVIDE_DEFAULT";
+                    continue;
+                }
+                if (!isNaN(parseFloat(line))) {
+                    const mNum = parseInt(line);
+                    if (i + 1 < metaLines.length) {
+                        const val = parseFloat(metaLines[i+1]);
+                        if (!isNaN(val)) {
+                            bpmMap[mNum] = val;
+                            i++; 
+                        }
+                    }
+                }
+            }
+            else if (state === "DIVIDE_DEFAULT") {
+                const val = parseFloat(line);
+                if (!isNaN(val)) {
+                    defaultDivideLength = val;
+                    if(divideMap[0] === undefined) divideMap[0] = val;
+                    state = "DIVIDE_PAIRS";
+                }
+            }
+            else if (state === "DIVIDE_PAIRS") {
+                if (!isNaN(parseFloat(line))) {
+                    const mNum = parseInt(line);
+                    if (i + 1 < metaLines.length) {
+                        const val = parseFloat(metaLines[i+1]);
+                        if (!isNaN(val)) {
+                            divideMap[mNum] = val;
+                            i++; 
+                        }
+                    }
+                }
+            }
+        }
+
+        // 全小節プロパティの確定
+        const MEASURE_PROPS = [];
+        let curBpm = bpmMap[0] || 120;
+        let curDiv = defaultDivideLength;
+        if(divideMap[0] !== undefined) curDiv = divideMap[0];
+
+        for(let m=0; m<totalMeasures; m++){
+            if(bpmMap[m] !== undefined) curBpm = bpmMap[m];
+            if(divideMap[m] !== undefined) curDiv = divideMap[m];
+            
+            MEASURE_PROPS[m] = {
+                bpm: curBpm,
+                divide: curDiv,
+                bpmChanged: (bpmMap[m] !== undefined || m===0)
+            };
+        }
+
+        // --- Phase 2: 描画 (時間軸 & カラム) ---
+        const VIEWPORT_HEIGHT = window.innerHeight - 80; 
+        
+        let currentColDiv = document.createElement('div');
+        currentColDiv.className = 'column';
+        let innerContainer = document.createElement('div');
+        innerContainer.className = 'column-inner';
+        currentColDiv.appendChild(innerContainer);
+        container.appendChild(currentColDiv);
+
+        let currentBottomY = 0; 
+
+        for (let m = 0; m < totalMeasures; m++) {
+            const props = MEASURE_PROPS[m];
+            
+            // 時間(秒) = (60 / BPM) * 4 * (Divide / 8.0)
+            const durationSec = (60 / props.bpm) * 4 * (props.divide / 8.0);
+            const heightPx = durationSec * PIXELS_PER_SECOND;
+
+            // 折り返し判定
+            if (currentBottomY > 0 && (currentBottomY + heightPx > VIEWPORT_HEIGHT)) {
+                currentColDiv = document.createElement('div');
+                currentColDiv.className = 'column';
+                innerContainer = document.createElement('div');
+                innerContainer.className = 'column-inner';
+                currentColDiv.appendChild(innerContainer);
+                container.appendChild(currentColDiv);
+                currentBottomY = 0;
+            }
+
+            // 小節コンテナ
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'measure-row';
+            rowDiv.style.height = `${heightPx}px`;
+            rowDiv.style.bottom = `${currentBottomY}px`; 
+            
+            currentBottomY += heightPx;
+
+            // グリッド
+            const gridCount = (props.divide / 8.0) * 16;
+            for (let g = 1; g < gridCount; g++) {
+                const gridLine = document.createElement('div');
+                gridLine.className = 'grid-line';
+                gridLine.style.bottom = `${(g / gridCount) * 100}%`;
+                if (g % 4 === 0) gridLine.classList.add('grid-4'); 
+                else gridLine.classList.add('grid-16'); 
+                rowDiv.appendChild(gridLine);
+            }
+
+            // ラベル
+            const numSpan = document.createElement('span');
+            numSpan.className = 'measure-number';
+            numSpan.innerText = m;
+            rowDiv.appendChild(numSpan);
+            
+            if (props.bpmChanged) {
+                const bpmSpan = document.createElement('span');
+                bpmSpan.className = 'bpm-label';
+                bpmSpan.innerText = `BPM ${props.bpm}`;
+                rowDiv.appendChild(bpmSpan);
+            }
+
+            // ノーツ
+            const laneContainer = document.createElement('div');
+            laneContainer.className = 'lane-container';
+            
+            fullLanes.forEach(laneData => {
+                const laneDiv = document.createElement('div');
+                laneDiv.className = 'lane';
+                
+                if (m < laneData.length) {
+                    const notesStr = laneData[m]; 
+                    if (notesStr && notesStr.length > 0) {
+                        const totalSteps = notesStr.length;
+                        const stepPercent = 100 / totalSteps;
+
+                        for (let i = 0; i < totalSteps; i++) {
+                            const char = notesStr[i];
+                            if (char !== '0') {
+                                const note = document.createElement('div');
+                                note.classList.add('note');
+                                note.classList.add(`note-${char}`);
+                                if (!['1','2','3'].includes(char)) note.classList.add('note-other');
+
+                                if (char === '3') {
+                                    note.style.height = `${stepPercent * 3}%`;
+                                    note.style.bottom = `${(i - 1) * stepPercent}%`;
+                                } else {
+                                    note.style.height = '6px';
+                                    note.style.bottom = `${i * stepPercent}%`;
+                                }
+                                laneDiv.appendChild(note);
+                            }
+                        }
+                    }
+                }
+                laneContainer.appendChild(laneDiv);
+            });
+            rowDiv.appendChild(laneContainer);
+            innerContainer.appendChild(rowDiv);
+        }
+    }
+</script>
+</body>
+</html>
